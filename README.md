@@ -134,4 +134,4 @@ This project demonstrates how data science and machine learning can be used to p
 
 ---
 
-⭐ If you like this project, give it a star!
+MR HN❤️
