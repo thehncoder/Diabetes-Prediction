@@ -1,6 +1,12 @@
 # Diabetes-Prediction
 
 # 🧠 Diabetes Prediction 
+## 👨‍💻 Developers
+
+* Asim Siddiqui
+* Asmit Raj
+* Naman Nigam
+* Harshit Nigam
 
 ## 📌 Project Overview
 
@@ -119,14 +125,6 @@ python diabetes_project.py
 
 ---
 
-## 👨‍💻 Developers
-
-* Asim Siddiqui
-* Asmit Raj
-* Naman Nigam
-* Harshit Nigam
-
----
 
 ## 📌 Conclusion
 
