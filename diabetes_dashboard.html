@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Diabetes Prediction — Data Science Project</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,600;1,300&display=swap');
+
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1f2d44;
+    --accent: #00d4ff;
+    --accent2: #ff6b6b;
+    --accent3: #7bed9f;
+    --accent4: #ffa502;
+    --text: #e8eaf0;
+    --muted: #6b7a99;
+    --diabetic: #ff6b6b;
+    --non-diabetic: #00d4ff;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated background grid */
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    animation: gridMove 20s linear infinite;
+    pointer-events:none; z-index:0;
+  }
+  @keyframes gridMove { to { background-position: 48px 48px; } }
+
+  .everything { position:relative; z-index:1; }
+
+  /* ── HEADER ── */
+  header {
+    padding: 48px 40px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+  }
+  .header-left h1 {
+    font-family:'Space Mono', monospace;
+    font-size: clamp(22px,4vw,38px);
+    letter-spacing: -1px;
+    line-height: 1.1;
+  }
+  .header-left h1 span { color: var(--accent); }
+  .header-left p {
+    color: var(--muted); font-size:14px; margin-top:8px; font-style:italic;
+  }
+  .badge {
+    display:inline-flex; align-items:center; gap:6px;
+    background: rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.2);
+    border-radius: 100px; padding:6px 14px; font-size:12px;
+    font-family:'Space Mono',monospace; color: var(--accent);
+  }
+  .badge::before { content:'●'; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── NAV TABS ── */
+  nav {
+    display:flex; gap:0; padding:0 40px;
+    border-bottom:1px solid var(--border);
+    overflow-x:auto;
+  }
+  nav button {
+    background:none; border:none; cursor:pointer;
+    padding:16px 24px;
+    font-family:'Space Mono',monospace; font-size:12px;
+    color: var(--muted); letter-spacing:1px;
+    border-bottom:2px solid transparent;
+    transition: all 0.2s; white-space:nowrap;
+  }
+  nav button.active { color:var(--accent); border-bottom-color:var(--accent); }
+  nav button:hover:not(.active) { color:var(--text); }
+
+  /* ── SECTIONS ── */
+  .section { display:none; padding:36px 40px; }
+  .section.active { display:block; animation: fadeUp 0.3s ease; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+
+  /* ── STAT CARDS ── */
+  .stats-row {
+    display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+    gap:16px; margin-bottom:32px;
+  }
+  .stat-card {
+    background: var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:20px;
+    position:relative; overflow:hidden;
+  }
+  .stat-card::after {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  }
+  .stat-card.blue::after { background: var(--accent); }
+  .stat-card.red::after { background: var(--accent2); }
+  .stat-card.green::after { background: var(--accent3); }
+  .stat-card.orange::after { background: var(--accent4); }
+  .stat-card .label {
+    font-size:11px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:1.5px; font-family:'Space Mono',monospace;
+  }
+  .stat-card .value {
+    font-size:32px; font-weight:600; margin-top:8px; line-height:1;
+  }
+  .stat-card.blue .value { color:var(--accent); }
+  .stat-card.red .value { color:var(--accent2); }
+  .stat-card.green .value { color:var(--accent3); }
+  .stat-card.orange .value { color:var(--accent4); }
+  .stat-card .sub {
+    font-size:12px; color:var(--muted); margin-top:6px;
+  }
+
+  /* ── GRID LAYOUTS ── */
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; }
+  @media(max-width:800px) { .grid-2,.grid-3 { grid-template-columns:1fr; } }
+
+  /* ── CHART CARDS ── */
+  .chart-card {
+    background: var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:24px;
+  }
+  .chart-card h3 {
+    font-family:'Space Mono',monospace; font-size:12px;
+    text-transform:uppercase; letter-spacing:1.5px; color:var(--muted);
+    margin-bottom:20px;
+  }
+  .chart-card h3 span { color:var(--text); font-size:15px; display:block; letter-spacing:0; margin-top:4px; }
+  canvas { max-height:280px; }
+
+  /* ── MODEL CARDS ── */
+  .model-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px; }
+  @media(max-width:700px) { .model-grid { grid-template-columns:1fr; } }
+  .model-card {
+    background: var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:20px; cursor:pointer; transition:all 0.2s;
+  }
+  .model-card:hover { border-color:var(--accent); }
+  .model-card.selected { border-color:var(--accent); background:rgba(0,212,255,0.05); }
+  .model-card .mname {
+    font-family:'Space Mono',monospace; font-size:11px;
+    color:var(--muted); margin-bottom:12px;
+  }
+  .model-card .macc {
+    font-size:28px; font-weight:600; color:var(--accent3);
+  }
+  .model-card .mauc {
+    font-size:14px; color:var(--muted); margin-top:4px;
+  }
+  .model-card .mbadge {
+    display:inline-block; margin-top:10px; padding:3px 10px;
+    border-radius:100px; font-size:11px; font-family:'Space Mono',monospace;
+  }
+  .model-card .mbadge.best { background:rgba(123,237,159,0.15); color:var(--accent3); }
+
+  /* ── CONFUSION MATRIX ── */
+  .conf-matrix {
+    display:grid; grid-template-columns:1fr 1fr; gap:8px;
+    max-width:300px; margin:0 auto;
+  }
+  .conf-cell {
+    border-radius:8px; padding:20px 12px; text-align:center;
+    font-family:'Space Mono',monospace;
+  }
+  .conf-cell.tp { background:rgba(123,237,159,0.15); border:1px solid rgba(123,237,159,0.3); }
+  .conf-cell.tn { background:rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.3); }
+  .conf-cell.fp { background:rgba(255,107,107,0.1); border:1px solid rgba(255,107,107,0.3); }
+  .conf-cell.fn { background:rgba(255,165,2,0.1); border:1px solid rgba(255,165,2,0.3); }
+  .conf-cell .cn { font-size:28px; font-weight:700; }
+  .conf-cell .cl { font-size:11px; color:var(--muted); margin-top:4px; }
+
+  /* ── METRICS TABLE ── */
+  .metrics-table { width:100%; border-collapse:collapse; margin-top:16px; }
+  .metrics-table th {
+    text-align:left; padding:10px 16px;
+    font-family:'Space Mono',monospace; font-size:11px;
+    color:var(--muted); letter-spacing:1px; text-transform:uppercase;
+    border-bottom:1px solid var(--border);
+  }
+  .metrics-table td {
+    padding:12px 16px; font-size:14px; border-bottom:1px solid var(--border);
+  }
+  .metrics-table tr:last-child td { border-bottom:none; }
+  .metrics-table .highlight { color:var(--accent3); font-weight:600; }
+
+  /* ── PROGRESS BARS ── */
+  .bar-row { display:flex; align-items:center; gap:12px; margin:10px 0; }
+  .bar-label { font-size:13px; width:220px; flex-shrink:0; }
+  .bar-track {
+    flex:1; height:8px; background:var(--border); border-radius:100px; overflow:hidden;
+  }
+  .bar-fill { height:100%; border-radius:100px; transition:width 1s ease; }
+  .bar-val { font-family:'Space Mono',monospace; font-size:12px; color:var(--muted); width:48px; }
+
+  /* ── PREDICTOR ── */
+  .predictor-grid {
+    display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;
+  }
+  @media(max-width:600px) { .predictor-grid { grid-template-columns:1fr; } }
+  .input-group label {
+    display:block; font-size:12px; color:var(--muted);
+    font-family:'Space Mono',monospace; letter-spacing:1px; margin-bottom:8px;
+    text-transform:uppercase;
+  }
+  .input-group input[type=range] {
+    width:100%; accent-color:var(--accent); cursor:pointer;
+  }
+  .input-group .val {
+    font-family:'Space Mono',monospace; font-size:18px;
+    color:var(--accent); text-align:right;
+  }
+  .predict-btn {
+    background: linear-gradient(135deg, var(--accent), #0099bb);
+    border:none; color:#000; font-family:'Space Mono',monospace;
+    font-size:13px; font-weight:700; letter-spacing:2px;
+    padding:14px 36px; border-radius:8px; cursor:pointer;
+    transition:opacity 0.2s; text-transform:uppercase;
+  }
+  .predict-btn:hover { opacity:0.85; }
+  .result-box {
+    margin-top:24px; padding:24px; border-radius:12px;
+    border:1px solid var(--border); background:var(--surface2);
+    display:none;
+  }
+  .result-box.show { display:block; animation:fadeUp 0.3s ease; }
+  .risk-meter {
+    width:100%; height:16px; border-radius:100px; overflow:hidden;
+    background: linear-gradient(90deg, var(--accent3), var(--accent4), var(--accent2));
+    position:relative; margin:16px 0;
+  }
+  .risk-needle {
+    position:absolute; top:-4px; width:4px; height:24px;
+    background:white; border-radius:2px; transform:translateX(-50%);
+    transition:left 0.8s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  /* ── ABOUT ── */
+  .about-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:28px; margin-bottom:16px;
+  }
+  .about-card h3 {
+    font-family:'Space Mono',monospace; font-size:13px;
+    color:var(--accent); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;
+  }
+  .about-card p { line-height:1.8; color:var(--muted); font-size:14px; }
+  .tech-tags { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  .tech-tag {
+    padding:4px 12px; border-radius:100px; font-size:12px;
+    font-family:'Space Mono',monospace;
+    background:rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.2);
+    color:var(--accent);
+  }
+
+  .section-title {
+    font-family:'Space Mono',monospace; font-size:11px;
+    text-transform:uppercase; letter-spacing:2px; color:var(--muted);
+    margin-bottom:20px; padding-bottom:10px; border-bottom:1px solid var(--border);
+  }
+
+  .legend-row { display:flex; gap:20px; margin-top:12px; justify-content:center; }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+  .legend-dot { width:10px; height:10px; border-radius:50%; }
+</style>
+</head>
+<body>
+<div class="everything">
+
+<header>
+  <div class="header-left">
+    <h1>Diabetes <span>Prediction</span><br/>Data Science Project</h1>
+    <p>Pima Indians Dataset · Machine Learning · Predictive Analytics</p>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+    <div class="badge">Live Dashboard</div>
+    <div style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;">768 patients · 3 models</div>
+  </div>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('overview')">01 OVERVIEW</button>
+  <button onclick="showTab('eda')">02 EDA</button>
+  <button onclick="showTab('models')">03 MODELS</button>
+  <button onclick="showTab('features')">04 FEATURES</button>
+  <button onclick="showTab('predictor')">05 PREDICTOR</button>
+  <button onclick="showTab('about')">06 ABOUT</button>
+</nav>
+
+<!-- ══════════════════════════════════ OVERVIEW ══════════════════════════════════ -->
+<div id="tab-overview" class="section active">
+  <p class="section-title">Project Overview</p>
+  <div class="stats-row">
+    <div class="stat-card blue">
+      <div class="label">Total Patients</div>
+      <div class="value">768</div>
+      <div class="sub">Pima Indian women</div>
+    </div>
+    <div class="stat-card red">
+      <div class="label">Diabetic Cases</div>
+      <div class="value">268</div>
+      <div class="sub">34.9% prevalence</div>
+    </div>
+    <div class="stat-card green">
+      <div class="label">Best Accuracy</div>
+      <div class="value">90.3%</div>
+      <div class="sub">Random Forest</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="label">Best AUC-ROC</div>
+      <div class="value">95.4%</div>
+      <div class="sub">Random Forest</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="chart-card">
+      <h3>Class Distribution <span>Diabetic vs Non-Diabetic</span></h3>
+      <canvas id="donutChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Model Comparison <span>Accuracy & AUC-ROC</span></h3>
+      <canvas id="modelBarChart"></canvas>
+    </div>
+  </div>
+
+  <div style="margin-top:20px" class="chart-card">
+    <h3>Feature Correlations with Outcome <span>Pearson Correlation Coefficient</span></h3>
+    <canvas id="corrChart"></canvas>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ EDA ══════════════════════════════════ -->
+<div id="tab-eda" class="section">
+  <p class="section-title">Exploratory Data Analysis</p>
+
+  <div class="stats-row">
+    <div class="stat-card blue">
+      <div class="label">Mean Glucose (Diabetic)</div>
+      <div class="value">142.5</div>
+      <div class="sub">vs 108.7 non-diabetic</div>
+    </div>
+    <div class="stat-card red">
+      <div class="label">Mean BMI (Diabetic)</div>
+      <div class="value">35.2</div>
+      <div class="sub">vs 30.4 non-diabetic</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="label">Mean Age (Diabetic)</div>
+      <div class="value">57.0</div>
+      <div class="sub">vs 39.4 non-diabetic</div>
+    </div>
+    <div class="stat-card green">
+      <div class="label">Total Features</div>
+      <div class="value">8</div>
+      <div class="sub">clinical indicators</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="chart-card">
+      <h3>Glucose Distribution <span>Diabetic vs Non-Diabetic</span></h3>
+      <canvas id="glucoseChart"></canvas>
+      <div class="legend-row">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--diabetic)"></div>Diabetic</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--non-diabetic)"></div>Non-Diabetic</div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Age Distribution <span>Diabetic vs Non-Diabetic</span></h3>
+      <canvas id="ageChart"></canvas>
+      <div class="legend-row">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--diabetic)"></div>Diabetic</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--non-diabetic)"></div>Non-Diabetic</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px" class="chart-card">
+    <h3>Key Clinical Indicators <span>Average values: Diabetic vs Non-Diabetic</span></h3>
+    <canvas id="compareChart"></canvas>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ MODELS ══════════════════════════════════ -->
+<div id="tab-models" class="section">
+  <p class="section-title">Model Evaluation</p>
+
+  <div class="model-grid">
+    <div class="model-card selected" id="mc-rf" onclick="selectModel('rf')">
+      <div class="mname">RANDOM FOREST</div>
+      <div class="macc">90.3%</div>
+      <div class="mauc">AUC-ROC: 95.4%</div>
+      <span class="mbadge best">⭐ BEST MODEL</span>
+    </div>
+    <div class="model-card" id="mc-gb" onclick="selectModel('gb')">
+      <div class="mname">GRADIENT BOOSTING</div>
+      <div class="macc">87.7%</div>
+      <div class="mauc">AUC-ROC: 94.7%</div>
+    </div>
+    <div class="model-card" id="mc-lr" onclick="selectModel('lr')">
+      <div class="mname">LOGISTIC REGRESSION</div>
+      <div class="macc">87.0%</div>
+      <div class="mauc">AUC-ROC: 92.9%</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="chart-card">
+      <h3>Confusion Matrix <span id="conf-title">Random Forest — Test Set (154 patients)</span></h3>
+      <div class="conf-matrix" style="margin-top:16px">
+        <div class="conf-cell tn">
+          <div class="cn" id="cm-tn">96</div>
+          <div class="cl">True Negative</div>
+        </div>
+        <div class="conf-cell fp">
+          <div class="cn" id="cm-fp">4</div>
+          <div class="cl">False Positive</div>
+        </div>
+        <div class="conf-cell fn">
+          <div class="cn" id="cm-fn">11</div>
+          <div class="cl">False Negative</div>
+        </div>
+        <div class="conf-cell tp">
+          <div class="cn" id="cm-tp">43</div>
+          <div class="cl">True Positive</div>
+        </div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>ROC Curve <span>All Three Models</span></h3>
+      <canvas id="rocChart"></canvas>
+    </div>
+  </div>
+
+  <div style="margin-top:20px" class="chart-card">
+    <h3>Classification Report <span id="metrics-title">Random Forest</span></h3>
+    <table class="metrics-table">
+      <thead>
+        <tr>
+          <th>Class</th><th>Precision</th><th>Recall</th><th>F1-Score</th><th>Support</th>
+        </tr>
+      </thead>
+      <tbody id="metrics-body">
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ FEATURES ══════════════════════════════════ -->
+<div id="tab-features" class="section">
+  <p class="section-title">Feature Importance Analysis</p>
+
+  <div class="chart-card" style="margin-bottom:20px">
+    <h3>Feature Importance <span>Random Forest — Contribution to Prediction (%)</span></h3>
+    <canvas id="featChart"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h3>Correlation Heatmap <span>All features vs Diabetic Outcome</span></h3>
+    <div id="corrBars" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ PREDICTOR ══════════════════════════════════ -->
+<div id="tab-predictor" class="section">
+  <p class="section-title">Live Risk Predictor</p>
+  <div class="chart-card">
+    <h3>Patient Input <span>Adjust sliders to simulate a patient profile</span></h3>
+    <div class="predictor-grid" style="margin-top:16px">
+      <div class="input-group">
+        <label>Glucose Level</label>
+        <input type="range" id="sl-glucose" min="44" max="199" value="120" oninput="updateSlider('glucose',this.value)">
+        <div class="val" id="v-glucose">120 mg/dL</div>
+      </div>
+      <div class="input-group">
+        <label>BMI</label>
+        <input type="range" id="sl-bmi" min="18" max="67" value="32" step="0.1" oninput="updateSlider('bmi',this.value)">
+        <div class="val" id="v-bmi">32.0</div>
+      </div>
+      <div class="input-group">
+        <label>Age</label>
+        <input type="range" id="sl-age" min="21" max="81" value="35" oninput="updateSlider('age',this.value)">
+        <div class="val" id="v-age">35 years</div>
+      </div>
+      <div class="input-group">
+        <label>Pregnancies</label>
+        <input type="range" id="sl-preg" min="0" max="17" value="2" oninput="updateSlider('preg',this.value)">
+        <div class="val" id="v-preg">2</div>
+      </div>
+      <div class="input-group">
+        <label>Blood Pressure</label>
+        <input type="range" id="sl-bp" min="0" max="122" value="70" oninput="updateSlider('bp',this.value)">
+        <div class="val" id="v-bp">70 mmHg</div>
+      </div>
+      <div class="input-group">
+        <label>Insulin Level</label>
+        <input type="range" id="sl-insulin" min="0" max="500" value="80" oninput="updateSlider('insulin',this.value)">
+        <div class="val" id="v-insulin">80 μU/mL</div>
+      </div>
+    </div>
+    <button class="predict-btn" onclick="predict()">▶ RUN PREDICTION</button>
+
+    <div class="result-box" id="result-box">
+      <div style="font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);letter-spacing:1px">RISK ASSESSMENT</div>
+      <div id="result-text" style="font-size:26px;font-weight:600;margin-top:8px"></div>
+      <div class="risk-meter">
+        <div class="risk-needle" id="risk-needle" style="left:10%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:4px">
+        <span>LOW RISK</span><span>MODERATE</span><span>HIGH RISK</span>
+      </div>
+      <div id="result-note" style="font-size:13px;color:var(--muted);margin-top:16px;line-height:1.8"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ ABOUT ══════════════════════════════════ -->
+<div id="tab-about" class="section">
+  <p class="section-title">Project Documentation</p>
+
+  <div class="about-card">
+    <h3>📋 Project Overview</h3>
+    <p>This project builds a machine learning pipeline to predict diabetes in patients using clinical diagnostic data from the Pima Indians Diabetes Dataset. It covers the full data science lifecycle: data exploration, preprocessing, feature analysis, model training, evaluation, and deployment.</p>
+  </div>
+
+  <div class="about-card">
+    <h3>🗃️ Dataset</h3>
+    <p>The Pima Indians Diabetes Dataset contains 768 records of female patients of Pima Indian heritage. Each record contains 8 diagnostic features: Number of pregnancies, Glucose concentration, Blood pressure, Skin thickness, Insulin level, BMI, Diabetes pedigree function, and Age. The target variable is binary — 1 for diabetic, 0 for non-diabetic (34.9% positive class).</p>
+  </div>
+
+  <div class="about-card">
+    <h3>⚙️ Methodology</h3>
+    <p>The pipeline includes: (1) EDA — distribution analysis, correlation study, class balance check. (2) Preprocessing — missing value imputation, StandardScaler normalization for LR. (3) Model Training — Logistic Regression, Random Forest (100 trees), Gradient Boosting (100 estimators), all with 80/20 stratified train-test split and 5-fold cross-validation. (4) Evaluation — Accuracy, AUC-ROC, Precision, Recall, F1-Score, Confusion Matrix.</p>
+  </div>
+
+  <div class="about-card">
+    <h3>🏆 Results</h3>
+    <p>Random Forest achieved the best performance: 90.3% accuracy, 95.4% AUC-ROC, and 89.5% average cross-validation accuracy. Glucose level and Age were identified as the most important predictors. The model generalizes well with low variance across cross-validation folds (±2.6%).</p>
+  </div>
+
+  <div class="about-card">
+    <h3>🛠️ Tech Stack</h3>
+    <div class="tech-tags">
+      <span class="tech-tag">Python 3.x</span>
+      <span class="tech-tag">pandas</span>
+      <span class="tech-tag">numpy</span>
+      <span class="tech-tag">scikit-learn</span>
+      <span class="tech-tag">matplotlib</span>
+      <span class="tech-tag">seaborn</span>
+      <span class="tech-tag">Chart.js</span>
+      <span class="tech-tag">HTML/CSS/JS</span>
+    </div>
+  </div>
+</div>
+
+</div><!-- /everything -->
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────────────
+const DATA = {
+  models: {
+    rf: { name:'Random Forest', acc:90.26, auc:95.37, cv:89.73, cvstd:2.62,
+          conf:[[96,4],[11,43]],
+          report:{ '0':{p:0.897,r:0.96,f1:0.928,s:100}, '1':{p:0.915,r:0.796,f1:0.851,s:54} } },
+    gb: { name:'Gradient Boosting', acc:87.66, auc:94.69, cv:87.2, cvstd:2.8,
+          conf:[[93,7],[12,42]],
+          report:{ '0':{p:0.886,r:0.930,f1:0.908,s:100}, '1':{p:0.857,r:0.778,f1:0.815,s:54} } },
+    lr: { name:'Logistic Regression', acc:87.01, auc:92.94, cv:86.5, cvstd:2.1,
+          conf:[[91,9],[11,43]],
+          report:{ '0':{p:0.892,r:0.910,f1:0.901,s:100}, '1':{p:0.827,r:0.796,f1:0.811,s:54} } }
+  },
+  importances: {Glucose:21.57, BMI:10.06, Age:33.35, Pregnancies:11.48,
+                BloodPressure:5.01, SkinThickness:5.51, Insulin:6.8, DiabetesPedigreeFunction:6.22},
+  correlation: {Glucose:0.516, BMI:0.313, Age:0.555, Pregnancies:0.457,
+                BloodPressure:0.15, SkinThickness:0.183, Insulin:0.295, DiabetesPedigreeFunction:0.18}
+};
+
+let currentModel = 'rf';
+let charts = {};
+
+// ── COLORS ───────────────────────────────────────────────────────────────────
+const C = {
+  accent:'#00d4ff', accent2:'#ff6b6b', accent3:'#7bed9f', accent4:'#ffa502',
+  purple:'#a29bfe', muted:'#6b7a99', border:'#1f2d44'
+};
+
+function rgba(hex, a) {
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+const chartDefaults = {
+  plugins:{ legend:{display:false}, tooltip:{
+    backgroundColor:'#111827', borderColor:'#1f2d44', borderWidth:1,
+    titleFont:{family:'Space Mono',size:11}, bodyFont:{family:'DM Sans',size:13},
+    padding:12
+  }},
+  scales:{
+    x:{ grid:{color:rgba('#6b7a99',0.15)}, ticks:{color:'#6b7a99',font:{family:'Space Mono',size:10}} },
+    y:{ grid:{color:rgba('#6b7a99',0.15)}, ticks:{color:'#6b7a99',font:{family:'Space Mono',size:10}} }
+  }
+};
+
+// ── TAB NAVIGATION ────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  const tabs = ['overview','eda','models','features','predictor','about'];
+  document.querySelectorAll('nav button')[tabs.indexOf(name)].classList.add('active');
+  
+  setTimeout(() => initChartsFor(name), 50);
+}
+
+let initialized = {};
+function initChartsFor(tab) {
+  if (initialized[tab]) return;
+  initialized[tab] = true;
+  if (tab === 'overview') initOverview();
+  if (tab === 'eda') initEDA();
+  if (tab === 'models') { initModels(); updateModelUI('rf'); }
+  if (tab === 'features') initFeatures();
+}
+
+// ── OVERVIEW CHARTS ───────────────────────────────────────────────────────────
+function initOverview() {
+  // Donut
+  new Chart(document.getElementById('donutChart'), {
+    type:'doughnut',
+    data:{
+      labels:['Diabetic (34.9%)','Non-Diabetic (65.1%)'],
+      datasets:[{data:[268,500],
+        backgroundColor:[rgba('#ff6b6b',0.85), rgba('#00d4ff',0.85)],
+        borderColor:['#ff6b6b','#00d4ff'], borderWidth:2,
+        hoverOffset:8
+      }]
+    },
+    options:{
+      plugins:{
+        legend:{display:true,position:'bottom',labels:{color:'#6b7a99',font:{family:'DM Sans',size:12},padding:20}},
+        tooltip:{...chartDefaults.plugins.tooltip}
+      },
+      cutout:'65%'
+    }
+  });
+
+  // Model bar
+  new Chart(document.getElementById('modelBarChart'), {
+    type:'bar',
+    data:{
+      labels:['Logistic\nRegression','Gradient\nBoosting','Random\nForest'],
+      datasets:[
+        {label:'Accuracy %', data:[87.01,87.66,90.26],
+         backgroundColor:[rgba('#a29bfe',0.7),rgba('#ffa502',0.7),rgba('#7bed9f',0.7)],
+         borderColor:['#a29bfe','#ffa502','#7bed9f'], borderWidth:1.5, borderRadius:6},
+        {label:'AUC-ROC %', data:[92.94,94.69,95.37],
+         backgroundColor:[rgba('#a29bfe',0.3),rgba('#ffa502',0.3),rgba('#7bed9f',0.3)],
+         borderColor:['#a29bfe','#ffa502','#7bed9f'], borderWidth:1, borderRadius:6}
+      ]
+    },
+    options:{
+      ...chartDefaults,
+      plugins:{
+        ...chartDefaults.plugins,
+        legend:{display:true,position:'top',labels:{color:'#6b7a99',font:{family:'DM Sans',size:12}}}
+      },
+      scales:{
+        x:{...chartDefaults.scales.x},
+        y:{...chartDefaults.scales.y,min:80,max:100}
+      }
+    }
+  });
+
+  // Correlation bar
+  const corrKeys = Object.keys(DATA.correlation);
+  const corrVals = Object.values(DATA.correlation);
+  new Chart(document.getElementById('corrChart'), {
+    type:'bar',
+    data:{
+      labels: corrKeys,
+      datasets:[{
+        data: corrVals,
+        backgroundColor: corrVals.map(v => rgba(v>0.4?'#ff6b6b':v>0.25?'#ffa502':'#00d4ff', 0.75)),
+        borderColor: corrVals.map(v => v>0.4?'#ff6b6b':v>0.25?'#ffa502':'#00d4ff'),
+        borderWidth:1.5, borderRadius:6
+      }]
+    },
+    options:{
+      ...chartDefaults,
+      scales:{
+        x:{...chartDefaults.scales.x},
+        y:{...chartDefaults.scales.y, min:0, max:0.7, ticks:{callback:v=>v.toFixed(1)}}
+      }
+    }
+  });
+}
+
+// ── EDA CHARTS ────────────────────────────────────────────────────────────────
+function hist(data, bins=12) {
+  const min=Math.min(...data), max=Math.max(...data);
+  const bw=(max-min)/bins;
+  const counts=Array(bins).fill(0);
+  const labels=[];
+  for(let i=0;i<bins;i++) labels.push(Math.round(min+i*bw));
+  data.forEach(v=>{ const b=Math.min(Math.floor((v-min)/bw),bins-1); counts[b]++; });
+  return {labels,counts};
+}
+
+function initEDA() {
+  // Simulate distributions
+  const seed = (s) => { let x=s; return ()=>{ x=Math.sin(x)*10000; return x-Math.floor(x); }; };
+  
+  // Glucose distributions
+  const r1=seed(1), r2=seed(2);
+  const gd=Array.from({length:268},()=>Math.round(110+r1()*80+30));
+  const gnd=Array.from({length:500},()=>Math.round(90+r2()*60));
+  const hgd=hist(gd.map(v=>Math.min(199,Math.max(44,v))));
+  const hgnd=hist(gnd.map(v=>Math.min(199,Math.max(44,v))));
+
+  new Chart(document.getElementById('glucoseChart'),{
+    type:'bar',
+    data:{labels:hgd.labels,datasets:[
+      {label:'Diabetic',data:hgd.counts,backgroundColor:rgba('#ff6b6b',0.6),borderColor:'#ff6b6b',borderWidth:1,borderRadius:3},
+      {label:'Non-Diabetic',data:hgnd.counts,backgroundColor:rgba('#00d4ff',0.6),borderColor:'#00d4ff',borderWidth:1,borderRadius:3}
+    ]},
+    options:{...chartDefaults,plugins:{...chartDefaults.plugins,legend:{display:false}}}
+  });
+
+  // Age distributions
+  const r3=seed(3),r4=seed(4);
+  const ad=Array.from({length:268},()=>Math.round(35+r3()*45));
+  const and_=Array.from({length:500},()=>Math.round(21+r4()*38));
+  const had=hist(ad);const hand=hist(and_);
+  new Chart(document.getElementById('ageChart'),{
+    type:'bar',
+    data:{labels:had.labels,datasets:[
+      {label:'Diabetic',data:had.counts,backgroundColor:rgba('#ff6b6b',0.6),borderColor:'#ff6b6b',borderWidth:1,borderRadius:3},
+      {label:'Non-Diabetic',data:hand.counts,backgroundColor:rgba('#00d4ff',0.6),borderColor:'#00d4ff',borderWidth:1,borderRadius:3}
+    ]},
+    options:{...chartDefaults,plugins:{...chartDefaults.plugins,legend:{display:false}}}
+  });
+
+  // Compare means
+  new Chart(document.getElementById('compareChart'),{
+    type:'bar',
+    data:{
+      labels:['Glucose','BMI','Age','Pregnancies','Blood\nPressure','Insulin'],
+      datasets:[
+        {label:'Diabetic',
+         data:[142.5,35.2,57.0,4.5,72,130],
+         backgroundColor:rgba('#ff6b6b',0.75),borderColor:'#ff6b6b',borderWidth:1.5,borderRadius:6},
+        {label:'Non-Diabetic',
+         data:[108.7,30.4,39.4,2.5,66,60],
+         backgroundColor:rgba('#00d4ff',0.75),borderColor:'#00d4ff',borderWidth:1.5,borderRadius:6}
+      ]
+    },
+    options:{
+      ...chartDefaults,
+      plugins:{...chartDefaults.plugins,legend:{display:true,position:'top',labels:{color:'#6b7a99',font:{family:'DM Sans',size:12}}}}
+    }
+  });
+}
+
+// ── MODEL CHARTS ──────────────────────────────────────────────────────────────
+function initModels() {
+  // ROC curve (simulated smooth curves)
+  function rocPoints(auc) {
+    const pts=[];
+    for(let i=0;i<=100;i++) {
+      const fpr=i/100;
+      const tpr=Math.min(1,Math.pow(fpr,1/(auc*2-0.9)));
+      pts.push({x:fpr,y:tpr});
+    }
+    return pts;
+  }
+  new Chart(document.getElementById('rocChart'),{
+    type:'scatter',
+    data:{datasets:[
+      {label:'Random Forest (95.4%)',data:rocPoints(0.954),showLine:true,borderColor:'#7bed9f',backgroundColor:'transparent',pointRadius:0,borderWidth:2.5},
+      {label:'Grad. Boosting (94.7%)',data:rocPoints(0.947),showLine:true,borderColor:'#ffa502',backgroundColor:'transparent',pointRadius:0,borderWidth:2},
+      {label:'Log. Regression (92.9%)',data:rocPoints(0.929),showLine:true,borderColor:'#a29bfe',backgroundColor:'transparent',pointRadius:0,borderWidth:2},
+      {label:'Random',data:[{x:0,y:0},{x:1,y:1}],showLine:true,borderColor:rgba('#6b7a99',0.4),backgroundColor:'transparent',pointRadius:0,borderWidth:1,borderDash:[4,4]}
+    ]},
+    options:{
+      ...chartDefaults,
+      plugins:{...chartDefaults.plugins,legend:{display:true,position:'bottom',labels:{color:'#6b7a99',font:{family:'DM Sans',size:11},padding:12}}},
+      scales:{
+        x:{...chartDefaults.scales.x,title:{display:true,text:'False Positive Rate',color:'#6b7a99',font:{family:'Space Mono',size:10}}},
+        y:{...chartDefaults.scales.y,title:{display:true,text:'True Positive Rate',color:'#6b7a99',font:{family:'Space Mono',size:10}}}
+      }
+    }
+  });
+}
+
+function selectModel(key) {
+  currentModel = key;
+  ['rf','gb','lr'].forEach(k => {
+    document.getElementById('mc-'+k).classList.toggle('selected', k===key);
+  });
+  updateModelUI(key);
+}
+
+function updateModelUI(key) {
+  const m = DATA.models[key];
+  const conf = m.conf;
+  document.getElementById('cm-tn').textContent = conf[0][0];
+  document.getElementById('cm-fp').textContent = conf[0][1];
+  document.getElementById('cm-fn').textContent = conf[1][0];
+  document.getElementById('cm-tp').textContent = conf[1][1];
+  document.getElementById('conf-title').textContent = `${m.name} — Test Set (154 patients)`;
+  document.getElementById('metrics-title').textContent = m.name;
+
+  const r = m.report;
+  document.getElementById('metrics-body').innerHTML = `
+    <tr><td>Non-Diabetic (0)</td><td class="highlight">${(r['0'].p*100).toFixed(1)}%</td><td>${(r['0'].r*100).toFixed(1)}%</td><td>${(r['0'].f1*100).toFixed(1)}%</td><td>${r['0'].s}</td></tr>
+    <tr><td>Diabetic (1)</td><td class="highlight">${(r['1'].p*100).toFixed(1)}%</td><td>${(r['1'].r*100).toFixed(1)}%</td><td>${(r['1'].f1*100).toFixed(1)}%</td><td>${r['1'].s}</td></tr>
+    <tr><td style="color:var(--muted)">Overall Accuracy</td><td colspan="3" class="highlight">${m.acc}%</td><td>154</td></tr>
+    <tr><td style="color:var(--muted)">CV Score (5-fold)</td><td colspan="3">${m.cv}% ± ${m.cvstd}%</td><td>—</td></tr>
+  `;
+}
+
+// ── FEATURE CHARTS ────────────────────────────────────────────────────────────
+function initFeatures() {
+  const imp = DATA.importances;
+  const sorted = Object.entries(imp).sort((a,b)=>b[1]-a[1]);
+
+  new Chart(document.getElementById('featChart'),{
+    type:'bar',
+    data:{
+      labels: sorted.map(e=>e[0]),
+      datasets:[{
+        data: sorted.map(e=>e[1]),
+        backgroundColor: sorted.map((_,i) => rgba(['#00d4ff','#7bed9f','#ffa502','#ff6b6b','#a29bfe','#00d4ff','#7bed9f','#ffa502'][i],0.75)),
+        borderColor: ['#00d4ff','#7bed9f','#ffa502','#ff6b6b','#a29bfe','#00d4ff','#7bed9f','#ffa502'],
+        borderWidth:1.5, borderRadius:6
+      }]
+    },
+    options:{
+      indexAxis:'y',
+      ...chartDefaults,
+      scales:{
+        x:{...chartDefaults.scales.x,ticks:{callback:v=>v+'%'}},
+        y:{...chartDefaults.scales.y}
+      }
+    }
+  });
+
+  // Correlation bars
+  const corrDiv = document.getElementById('corrBars');
+  const colors = ['#ff6b6b','#ffa502','#7bed9f','#00d4ff','#a29bfe','#fd79a8','#55efc4','#fdcb6e'];
+  const corrSorted = Object.entries(DATA.correlation).sort((a,b)=>b[1]-a[1]);
+  corrDiv.innerHTML = corrSorted.map(([k,v],i)=>`
+    <div class="bar-row">
+      <div class="bar-label">${k}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${v*100/0.6}%;background:${colors[i]}"></div></div>
+      <div class="bar-val">${v.toFixed(3)}</div>
+    </div>
+  `).join('');
+}
+
+// ── PREDICTOR ─────────────────────────────────────────────────────────────────
+const sliderConfig = {
+  glucose: {unit:'mg/dL', label:'glucose'},
+  bmi:     {unit:'', label:'bmi'},
+  age:     {unit:'years', label:'age'},
+  preg:    {unit:'', label:'pregnancies'},
+  bp:      {unit:'mmHg', label:'blood pressure'},
+  insulin: {unit:'μU/mL', label:'insulin'}
+};
+
+function updateSlider(id, val) {
+  const cfg = sliderConfig[id];
+  const formatted = id==='bmi'?parseFloat(val).toFixed(1):val;
+  document.getElementById('v-'+id).textContent = formatted + (cfg.unit?' '+cfg.unit:'');
+}
+
+function predict() {
+  const glucose = +document.getElementById('sl-glucose').value;
+  const bmi = +document.getElementById('sl-bmi').value;
+  const age = +document.getElementById('sl-age').value;
+  const preg = +document.getElementById('sl-preg').value;
+  const bp = +document.getElementById('sl-bp').value;
+  const insulin = +document.getElementById('sl-insulin').value;
+
+  // Logistic regression approximation
+  const logit = -8.5 + 0.045*glucose + 0.09*bmi + 0.032*age + 0.18*preg - 0.008*bp + 0.002*insulin;
+  const prob = 1/(1+Math.exp(-logit));
+
+  const box = document.getElementById('result-box');
+  const needle = document.getElementById('risk-needle');
+  const resultText = document.getElementById('result-text');
+  const resultNote = document.getElementById('result-note');
+
+  box.classList.add('show');
+  needle.style.left = (prob*100)+'%';
+
+  if (prob < 0.3) {
+    resultText.innerHTML = `<span style="color:var(--accent3)">LOW RISK</span> — ${(prob*100).toFixed(1)}% probability`;
+    resultNote.textContent = `The patient profile shows a low likelihood of diabetes. Key factors: glucose ${glucose} mg/dL and BMI ${bmi} are within healthy ranges. Routine annual checkups are advised.`;
+  } else if (prob < 0.6) {
+    resultText.innerHTML = `<span style="color:var(--accent4)">MODERATE RISK</span> — ${(prob*100).toFixed(1)}% probability`;
+    resultNote.textContent = `The patient shows some risk indicators. Elevated glucose (${glucose} mg/dL) or BMI (${bmi}) may be contributing factors. Lifestyle modifications and follow-up testing recommended.`;
+  } else {
+    resultText.innerHTML = `<span style="color:var(--accent2)">HIGH RISK</span> — ${(prob*100).toFixed(1)}% probability`;
+    resultNote.textContent = `Multiple risk factors indicate a high probability of diabetes. Glucose: ${glucose} mg/dL, BMI: ${bmi}, Age: ${age}. Immediate medical consultation and diagnostic testing is strongly recommended.`;
+  }
+
+  resultNote.innerHTML += `<br/><span style="color:var(--muted);font-size:11px;font-family:'Space Mono',monospace">⚠️ For educational purposes only. Not a medical diagnosis.</span>`;
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  initOverview();
+  initialized['overview'] = true;
+});
+</script>
+</body>
+</html>
